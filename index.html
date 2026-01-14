@@ -1,0 +1,908 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Brewog's Games Manager</title>
+    <link rel="icon" href="fire.png" type="image/x-icon">
+    
+    <!-- 1. STYLE: TAILWIND CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Inter', 'sans-serif'] },
+                    animation: {
+                        'bounce-slow': 'bounce 3s infinite',
+                        'pulse-fast': 'pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                        'fade-in': 'fadeIn 0.5s ease-out forwards',
+                        'slide-up': 'slideUp 0.3s ease-out forwards',
+                        'float': 'float 3s ease-in-out infinite',
+                    },
+                    keyframes: {
+                        fadeIn: { '0%': { opacity: '0' }, '100%': { opacity: '1' } },
+                        slideUp: { '0%': { transform: 'translateY(20px)', opacity: '0' }, '100%': { transform: 'translateY(0)', opacity: '1' } },
+                        float: { '0%, 100%': { transform: 'translateY(0)' }, '50%': { transform: 'translateY(-10px)' } }
+                    }
+                }
+            }
+        }
+    </script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;900&display=swap" rel="stylesheet">
+
+    <!-- 2. MESIN: REACT & BABEL -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- 3. LIBRARY PENDUKUNG -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <!-- 4. DATABASE: FIREBASE -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+
+    <style>
+        body { font-family: 'Inter', sans-serif; -webkit-tap-highlight-color: transparent; }
+        
+        /* Glassmorphism Premium */
+        .glass {
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.4);
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.1);
+        }
+        .dark .glass {
+            background: rgba(15, 23, 42, 0.6);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+        }
+
+        /* Custom Scrollbar */
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 20px; }
+        .dark .custom-scrollbar::-webkit-scrollbar-thumb { background-color: #334155; }
+        
+        /* Loading Bar */
+        .loading-bar {
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, #10b981, transparent);
+            background-size: 200% 100%;
+            animation: loading 1.5s infinite linear;
+        }
+        @keyframes loading {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+    </style>
+</head>
+<body class="bg-slate-100 text-gray-800 dark:bg-[#0a0f1c] dark:text-slate-200 transition-colors duration-500">
+    
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useMemo, useRef } = React;
+
+        // --- KONFIGURASI FIREBASE ---
+        const firebaseConfig = {
+            apiKey: "AIzaSyCZ1EB-3X-aobSiCjLV_Ktr16glqP6SZxo",
+            authDomain: "brewog-s-games.firebaseapp.com",
+            databaseURL: "https://brewog-s-games-default-rtdb.asia-southeast1.firebasedatabase.app",
+            projectId: "brewog-s-games",
+            storageBucket: "brewog-s-games.firebasestorage.app",
+            messagingSenderId: "346826630408",
+            appId: "1:346826630408:web:4de70c27a6d72ee75438bd",
+            measurementId: "G-7P343BF3F6"
+        };
+
+        if (!firebase.apps.length) {
+            firebase.initializeApp(firebaseConfig);
+        }
+        const auth = firebase.auth();
+        const db = firebase.database();
+        const ROOT_PATH = 'brewog_store_v1';
+
+        const DEFAULT_PACKAGES = [
+            { order: 1, category: 'PAKET CLASSIC', name: 'Paket 1 Jam', price: 15000, description: '' },
+            { order: 2, category: 'PAKET CLASSIC', name: 'Paket 2 Jam', price: 25000, description: '' },
+            { order: 3, category: 'PAKET CLASSIC', name: 'Paket 3 Jam', price: 40000, description: '' },
+            { order: 4, category: 'PAKET CLASSIC', name: 'Paket 4 Jam', price: 45000, description: '' },
+            { order: 5, category: 'PAKET CLASSIC', name: 'Paket 5 Jam', price: 50000, description: '' },
+            { order: 6, category: 'PAKET DIAMOND', name: 'Paket Enjoy', price: 40000, description: '18.30 – 22.00' },
+            { order: 7, category: 'PAKET DIAMOND', name: 'Paket Garang', price: 40000, description: '22.00 – 01.30' },
+            { order: 8, category: 'PAKET DIAMOND', name: 'Paket Mabok', price: 60000, description: '18.30 – 01.30' },
+            { order: 9, category: 'PAKET PREMIUM', name: 'Paket Weekdays', price: 120000, description: 'Senin – Kamis / 24 Jam' },
+            { order: 10, category: 'PAKET PREMIUM', name: 'Paket Weekend', price: 140000, description: 'Jumat, Sabtu, Minggu / 24 Jam' },
+        ];
+
+        // --- KOMPONEN IKON (FIXED) ---
+        const Icon = ({ name, size = 20, className = "" }) => {
+            const iconRef = useRef(null);
+            useEffect(() => {
+                if (iconRef.current) {
+                    iconRef.current.innerHTML = '';
+                    const i = document.createElement('i');
+                    i.setAttribute('data-lucide', name);
+                    i.className = className;
+                    iconRef.current.appendChild(i);
+                    lucide.createIcons({
+                        root: iconRef.current,
+                        nameAttr: 'data-lucide',
+                        attrs: { class: className, width: size, height: size, stroke: "currentColor", "stroke-width": 2, "stroke-linecap": "round", "stroke-linejoin": "round" }
+                    });
+                }
+            }, [name, size, className]);
+            return <span ref={iconRef} className="inline-flex items-center justify-center"></span>;
+        };
+
+        // --- APP UTAMA ---
+        function App() {
+            const [user, setUser] = useState(null);
+            const [isAuthenticated, setIsAuthenticated] = useState(false);
+            const [loading, setLoading] = useState(true);
+            const [introFinished, setIntroFinished] = useState(false);
+            const [dbConnected, setDbConnected] = useState(false);
+            const [permissionError, setPermissionError] = useState(false);
+            const [theme, setTheme] = useState('light');
+            const [isOfflineMode, setIsOfflineMode] = useState(() => localStorage.getItem('brewogs_offline_mode') === 'true');
+
+            useEffect(() => {
+                auth.signInAnonymously().catch(e => { console.error(e); setDbConnected(false); });
+                auth.onAuthStateChanged(u => {
+                    if (u) { setUser(u); setDbConnected(true); }
+                    setTimeout(() => setLoading(false), 2000);
+                    if (localStorage.getItem('brewogs_login_session') === 'active') setIsAuthenticated(true);
+                });
+                const connectedRef = db.ref(".info/connected");
+                connectedRef.on("value", (snap) => setDbConnected(snap.val() === true));
+                setTimeout(() => setIntroFinished(true), 3000);
+            }, []);
+
+            useEffect(() => {
+                if (theme === 'dark') document.documentElement.classList.add('dark');
+                else document.documentElement.classList.remove('dark');
+            }, [theme]);
+
+            const toggleTheme = () => setTheme(theme === 'light' ? 'dark' : 'light');
+            const handleLogout = () => { localStorage.removeItem('brewogs_login_session'); setIsAuthenticated(false); };
+            const enableOffline = () => { localStorage.setItem('brewogs_offline_mode', 'true'); setIsOfflineMode(true); setPermissionError(false); window.location.reload(); };
+            const disableOffline = () => { localStorage.removeItem('brewogs_offline_mode'); setIsOfflineMode(false); window.location.reload(); };
+
+            if (!introFinished || loading) return <IntroScreen />;
+
+            return (
+                <div className="min-h-screen relative overflow-x-hidden selection:bg-emerald-500/30">
+                    {/* Background Animation */}
+                    <div className="fixed inset-0 overflow-hidden pointer-events-none">
+                        <div className={`absolute top-[-10%] left-[-10%] w-[600px] h-[600px] rounded-full blur-[100px] opacity-20 animate-pulse ${theme === 'dark' ? 'bg-emerald-900' : 'bg-emerald-200'}`}></div>
+                        <div className={`absolute bottom-[-10%] right-[-10%] w-[600px] h-[600px] rounded-full blur-[100px] opacity-20 animate-pulse delay-1000 ${theme === 'dark' ? 'bg-blue-900' : 'bg-blue-200'}`}></div>
+                    </div>
+
+                    {permissionError && !isOfflineMode && (
+                        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-6">
+                            <div className="bg-white dark:bg-slate-900 p-8 rounded-3xl text-center max-w-sm shadow-2xl border border-red-500/20">
+                                <div className="text-red-500 mb-4 mx-auto flex justify-center"><Icon name="shield-alert" size={48} /></div>
+                                <h2 className="text-xl font-bold mb-2">Koneksi Terputus</h2>
+                                <p className="text-sm text-gray-500 mb-6">Gagal terhubung ke database. Cek internet Anda.</p>
+                                <button onClick={enableOffline} className="w-full py-3 bg-emerald-600 text-white rounded-xl font-bold mb-2">MODE OFFLINE</button>
+                                <button onClick={() => window.location.reload()} className="w-full py-3 bg-gray-200 dark:bg-slate-800 rounded-xl font-bold">COBA LAGI</button>
+                            </div>
+                        </div>
+                    )}
+
+                    {!isAuthenticated ? (
+                        <LoginScreen onSuccess={() => { localStorage.setItem('brewogs_login_session', 'active'); setIsAuthenticated(true); }} isOffline={isOfflineMode} />
+                    ) : (
+                        <MainApp 
+                            user={user} 
+                            onLogout={handleLogout} 
+                            dbConnected={dbConnected}
+                            theme={theme}
+                            toggleTheme={toggleTheme}
+                            isOffline={isOfflineMode}
+                            onDisableOffline={disableOffline}
+                            setPermissionError={setPermissionError}
+                        />
+                    )}
+                </div>
+            );
+        }
+
+        // --- INTRO SCREEN ---
+        function IntroScreen() {
+            return (
+                <div className="flex h-screen items-center justify-center bg-slate-950 relative z-50">
+                    <div className="text-center">
+                        <div className="relative inline-block mb-8">
+                            <div className="absolute inset-0 bg-emerald-500/30 blur-2xl rounded-full"></div>
+                            <div className="relative bg-slate-900 p-8 rounded-[2.5rem] border border-emerald-500/30 shadow-2xl animate-float">
+                                <Icon name="gamepad-2" size={80} className="text-emerald-500" />
+                            </div>
+                        </div>
+                        <h1 className="text-4xl font-black text-white tracking-tighter mb-4">BREWOG'S <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-300">GAMES</span></h1>
+                        <div className="w-48 h-1.5 bg-gray-800 rounded-full mx-auto overflow-hidden">
+                            <div className="loading-bar"></div>
+                        </div>
+                        <p className="text-[10px] text-emerald-500/60 font-mono mt-4 tracking-[0.4em] animate-pulse">SYSTEM INITIALIZING</p>
+                    </div>
+                </div>
+            );
+        }
+
+        // --- LOGIN SCREEN ---
+        function LoginScreen({ onSuccess, isOffline }) {
+            const [id, setId] = useState('');
+            const [pass, setPass] = useState('');
+            const [error, setError] = useState('');
+
+            const handleSubmit = (e) => {
+                e.preventDefault();
+                const storedId = localStorage.getItem('admin_id') || 'brewogsgames';
+                const storedPass = localStorage.getItem('admin_pass') || 'kherimut2026';
+                if (id === storedId && pass === storedPass) onSuccess();
+                else setError('ID atau Password Salah!');
+            };
+
+            return (
+                <div className="flex h-screen flex-col items-center justify-center p-6 relative z-10">
+                    <div className="w-full max-w-sm glass p-10 rounded-[2.5rem] shadow-2xl relative overflow-hidden">
+                         {isOffline && <div className="absolute top-0 inset-x-0 bg-amber-500 text-white text-[10px] font-bold text-center py-1">OFFLINE MODE</div>}
+                         <div className="text-center mb-10">
+                             <div className="flex justify-center mb-6">
+                                <div className="p-4 bg-gradient-to-br from-emerald-500 to-teal-700 rounded-2xl shadow-lg shadow-emerald-500/30 transform rotate-12">
+                                    <Icon name="gamepad-2" size={40} className="text-white" />
+                                </div>
+                             </div>
+                             <h2 className="text-2xl font-black text-gray-800 dark:text-white">ADMIN PORTAL</h2>
+                             <p className="text-xs text-gray-500 mt-1">Masuk untuk mengelola rental</p>
+                         </div>
+                         <form onSubmit={handleSubmit} className="space-y-5">
+                             <div className="space-y-1">
+                                <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">ID Admin</label>
+                                <input type="text" className="w-full p-4 rounded-xl bg-gray-50 dark:bg-slate-900/50 border border-gray-200 dark:border-slate-700 outline-none focus:ring-2 focus:ring-emerald-500 transition-all font-bold" value={id} onChange={e=>setId(e.target.value)} />
+                             </div>
+                             <div className="space-y-1">
+                                <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Password</label>
+                                <input type="password" className="w-full p-4 rounded-xl bg-gray-50 dark:bg-slate-900/50 border border-gray-200 dark:border-slate-700 outline-none focus:ring-2 focus:ring-emerald-500 transition-all font-bold" value={pass} onChange={e=>setPass(e.target.value)} />
+                             </div>
+                             {error && <p className="text-red-500 text-xs text-center font-bold bg-red-100 dark:bg-red-900/20 p-2 rounded-lg">{error}</p>}
+                             <button type="submit" className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-lg shadow-emerald-500/30 active:scale-95 transition-all flex justify-center items-center gap-2">
+                                <Icon name="lock" size={18} /> MASUK
+                             </button>
+                         </form>
+                    </div>
+                    <p className="mt-8 text-[10px] text-gray-400 font-mono">powered by J.Sheby</p>
+                </div>
+            );
+        }
+
+        // --- DASHBOARD UTAMA ---
+        function MainApp({ user, onLogout, dbConnected, theme, toggleTheme, isOffline, onDisableOffline, setPermissionError }) {
+            const [view, setView] = useState('dashboard');
+            const [transactions, setTransactions] = useState([]);
+            const [packages, setPackages] = useState([]);
+            const [time, setTime] = useState(new Date());
+            const [modal, setModal] = useState({ open: false, type: null, data: null });
+            const [confirmDelete, setConfirmDelete] = useState({ open: false, id: null, collection: null });
+            const [chartType, setChartType] = useState('line');
+            const [showReminder, setShowReminder] = useState(false);
+            const [refreshTrigger, setRefreshTrigger] = useState(0); 
+            const [isProcessing, setIsProcessing] = useState(false);
+            const chartCanvasRef = useRef(null);
+            const [chartInstance, setChartInstance] = useState(null);
+
+            useEffect(() => setInterval(() => setTime(new Date()), 1000), []);
+
+            useEffect(() => {
+                const today = new Date().getDate();
+                const key = `${new Date().getMonth()}-${new Date().getFullYear()}`;
+                if ((today >= 25 || today <= 5) && localStorage.getItem('last_dl') !== key) {
+                    setShowReminder(true);
+                }
+            }, []);
+
+            // DATA FETCHING
+            useEffect(() => {
+                if (isOffline) {
+                    const local = JSON.parse(localStorage.getItem('brewogs_local_data') || '{}');
+                    if (local.transactions) {
+                        const t = local.transactions.map(x => ({
+                            ...x, 
+                            createdAt: new Date(x.createdAt),
+                            totalPrice: Number(x.totalPrice)||0
+                        }));
+                        setTransactions(t.sort((a,b) => b.createdAt - a.createdAt));
+                    }
+                    if (local.packages) setPackages(local.packages.sort((a,b) => (a.order||0) - (b.order||0)));
+                    else setPackages(DEFAULT_PACKAGES);
+                    return;
+                }
+
+                const transRef = db.ref(`${ROOT_PATH}/transactions`);
+                const pkgRef = db.ref(`${ROOT_PATH}/packages`);
+
+                transRef.on('value', (snap) => {
+                    const val = snap.val();
+                    if (val) {
+                        const list = Object.keys(val).map(k => ({
+                            id: k, 
+                            ...val[k], 
+                            createdAt: new Date(val[k].createdAt), 
+                            totalPrice: Number(val[k].totalPrice) || 0
+                        }));
+                        setTransactions(list.sort((a,b) => b.createdAt - a.createdAt));
+                    } else setTransactions([]);
+                }, (err) => {
+                    if(err.code === 'PERMISSION_DENIED') setPermissionError(true);
+                });
+
+                pkgRef.on('value', (snap) => {
+                    const val = snap.val();
+                    if (val) {
+                        const list = Object.keys(val).map(k => ({id: k, ...val[k]}));
+                        setPackages(list.sort((a,b) => (a.order||0) - (b.order||0)));
+                    } else {
+                         DEFAULT_PACKAGES.forEach(p => pkgRef.push(p));
+                    }
+                });
+
+                return () => { transRef.off(); pkgRef.off(); };
+            }, [isOffline, refreshTrigger]);
+
+            const fakeLoading = (callback) => {
+                setIsProcessing(true);
+                setTimeout(() => { 
+                    callback(); 
+                    setIsProcessing(false);
+                }, 1000); 
+            };
+
+            // CRUD
+            const saveData = async (type, data, id) => {
+                fakeLoading(async () => {
+                    const path = type === 'trans' ? 'transactions' : 'packages';
+                    const payload = {...data};
+                    if(type === 'trans') {
+                        payload.createdAt = new Date().toISOString();
+                        payload.totalPrice = Number(payload.totalPrice) || 0;
+                    }
+
+                    if (isOffline) {
+                        const local = JSON.parse(localStorage.getItem('brewogs_local_data') || '{"transactions":[], "packages":[]}');
+                        if(id) {
+                            local[path] = local[path].map(i => i.id === id ? {...i, ...payload} : i);
+                        } else {
+                            local[path].push({...payload, id: 'loc_'+Date.now()});
+                        }
+                        localStorage.setItem('brewogs_local_data', JSON.stringify(local));
+                        setRefreshTrigger(prev => prev + 1);
+                    } else {
+                        if (id) await db.ref(`${ROOT_PATH}/${path}/${id}`).update(payload);
+                        else await db.ref(`${ROOT_PATH}/${path}`).push(payload);
+                    }
+                });
+            };
+
+            const deleteData = async () => {
+                const { id, collection: path } = confirmDelete;
+                fakeLoading(async () => {
+                    if (isOffline) {
+                        const local = JSON.parse(localStorage.getItem('brewogs_local_data'));
+                        local[path] = local[path].filter(i => i.id !== id);
+                        localStorage.setItem('brewogs_local_data', JSON.stringify(local));
+                        setRefreshTrigger(prev => prev + 1);
+                    } else {
+                        await db.ref(`${ROOT_PATH}/${path}/${id}`).remove();
+                    }
+                    setConfirmDelete({open: false, id: null, collection: null});
+                });
+            };
+
+            const handleReorder = async (arg1, arg2) => {
+                 let newPkgs = [...packages];
+                 // Drag & Drop logic (obj)
+                 if(typeof arg1 === 'object') {
+                     const { sourceIndex, destinationIndex } = arg1;
+                     const [reorderedItem] = newPkgs.splice(sourceIndex, 1);
+                     newPkgs.splice(destinationIndex, 0, reorderedItem);
+                 } 
+                 // Button logic (index, direction)
+                 else if(typeof arg1 === 'number' && typeof arg2 === 'string') {
+                     const idx = arg1;
+                     if(arg2 === 'up' && idx > 0) [newPkgs[idx], newPkgs[idx-1]] = [newPkgs[idx-1], newPkgs[idx]];
+                     if(arg2 === 'down' && idx < newPkgs.length-1) [newPkgs[idx], newPkgs[idx+1]] = [newPkgs[idx+1], newPkgs[idx]];
+                 }
+                 
+                 const updates = {};
+                 const orderedPkgs = newPkgs.map((p,i) => {
+                     const updated = {...p, order: i+1};
+                     if(!isOffline && p.id) updates[`${ROOT_PATH}/packages/${p.id}/order`] = i+1;
+                     return updated;
+                 });
+                 setPackages(orderedPkgs);
+
+                 if(isOffline) {
+                    const local = JSON.parse(localStorage.getItem('brewogs_local_data'));
+                    local.packages = orderedPkgs;
+                    localStorage.setItem('brewogs_local_data', JSON.stringify(local));
+                 } else {
+                    await db.ref().update(updates);
+                }
+            };
+            
+            // Touch Handlers for Drag
+            const [touchStart, setTouchStart] = useState(null);
+            const onTouchStart = (e) => setTouchStart(e.targetTouches[0].clientY);
+            const onTouchEnd = (index, e) => {
+                if (!touchStart) return;
+                const touchEnd = e.changedTouches[0].clientY;
+                const distance = touchStart - touchEnd;
+                if (distance > 50) handleReorder(index, 'up'); 
+                if (distance < -50) handleReorder(index, 'down'); 
+                setTouchStart(null);
+            };
+
+            // Chart
+            useEffect(() => {
+                if (view !== 'dashboard' || !chartCanvasRef.current) return;
+                
+                const now = new Date();
+                const days = new Date(now.getFullYear(), now.getMonth()+1, 0).getDate();
+                const data = Array(days).fill(0);
+                const labels = Array.from({length: days}, (_, i) => i + 1);
+                
+                transactions.filter(t => t.createdAt.getMonth() === now.getMonth() && t.createdAt.getFullYear() === now.getFullYear()).forEach(t => {
+                    const d = t.createdAt.getDate() - 1;
+                    if(d >= 0) data[d] += t.totalPrice;
+                });
+
+                if(chartInstance) chartInstance.destroy();
+                
+                const ctx = chartCanvasRef.current.getContext('2d');
+                const isDark = theme === 'dark';
+                
+                const gradient = ctx.createLinearGradient(0, 0, 0, 400);
+                gradient.addColorStop(0, isDark ? 'rgba(16, 185, 129, 0.5)' : 'rgba(16, 185, 129, 0.2)');
+                gradient.addColorStop(1, 'rgba(16, 185, 129, 0)');
+
+                const newChart = new Chart(ctx, {
+                    type: chartType,
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: 'Omset Harian',
+                            data: data,
+                            borderColor: '#10b981',
+                            backgroundColor: chartType === 'line' ? gradient : '#10b981',
+                            borderWidth: 2,
+                            tension: 0.4,
+                            fill: true,
+                            pointBackgroundColor: isDark ? '#1e293b' : '#fff',
+                            borderRadius: 4
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: {display: false} },
+                        scales: {
+                            x: { grid: {display:false}, ticks: {color: isDark ? '#94a3b8' : '#64748b', font: {weight:'bold'}} },
+                            y: { grid: {color: isDark ? '#334155' : '#e2e8f0'}, ticks: {color: isDark ? '#94a3b8' : '#64748b', callback: v=>(v/1000)+'k'} }
+                        }
+                    }
+                });
+                setChartInstance(newChart);
+                return () => newChart.destroy();
+            }, [transactions, chartType, theme, view]);
+
+            const stats = useMemo(() => {
+                const now = new Date();
+                const m = transactions.filter(t => t.createdAt.getMonth() === now.getMonth() && t.createdAt.getFullYear() === now.getFullYear()).reduce((a,b)=>a+(b.totalPrice||0), 0);
+                const all = transactions.reduce((a,b)=>a+(b.totalPrice||0), 0);
+                return { m, all };
+            }, [transactions]);
+
+            const fmt = (n) => new Intl.NumberFormat('id-ID', {style:'currency', currency:'IDR', minimumFractionDigits:0}).format(n);
+
+            return (
+                <div className="relative z-10">
+                    {/* LOADING OVERLAY */}
+                    {isProcessing && (
+                        <div className="fixed inset-0 z-[999] bg-black/80 flex flex-col items-center justify-center backdrop-blur-sm animate-fade-in">
+                            <div className="relative mb-6">
+                                <div className="absolute -inset-4 bg-emerald-500/40 rounded-full blur-xl animate-pulse"></div>
+                                <div className="relative animate-bounce-slow">
+                                     <Icon name="gamepad-2" size={80} className="text-emerald-400" />
+                                </div>
+                            </div>
+                            <p className="text-sm font-black tracking-[0.2em] text-white mt-6 animate-pulse">MENYIMPAN DATA...</p>
+                        </div>
+                    )}
+
+                    {/* CONFIRM DELETE MODAL (CUSTOM) */}
+                    {confirmDelete.open && (
+                         <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/80 p-6 backdrop-blur-md animate-fade-in">
+                            <div className="bg-white dark:bg-slate-900 p-8 rounded-[2rem] text-center max-w-xs w-full animate-slide-up border border-red-500/20 shadow-2xl">
+                                <div className="w-20 h-20 bg-red-50 dark:bg-red-900/20 rounded-full flex items-center justify-center mx-auto mb-6 text-red-500 animate-bounce">
+                                    <Icon name="trash-2" size={36} />
+                                </div>
+                                <h3 className="text-xl font-black mb-2 dark:text-white">Hapus Data?</h3>
+                                <p className="text-sm text-gray-500 mb-6 leading-relaxed">Data yang dihapus akan hilang selamanya.</p>
+                                <div className="flex gap-3">
+                                    <button onClick={()=>setConfirmDelete({open:false})} className="flex-1 py-3 bg-gray-100 dark:bg-slate-800 rounded-xl font-bold text-gray-600 dark:text-slate-300">BATAL</button>
+                                    <button onClick={deleteData} className="flex-1 py-3 bg-red-600 text-white rounded-xl font-bold shadow-lg shadow-red-500/30 hover:scale-105 transition-transform">HAPUS</button>
+                                </div>
+                            </div>
+                         </div>
+                    )}
+
+                    <div className="sticky top-0 z-30 glass px-6 py-4 flex justify-between items-center transition-all">
+                        <div className="flex items-center gap-3">
+                            <div className={`p-2 rounded-xl text-white shadow-lg ${isOffline ? 'bg-amber-500' : 'bg-gradient-to-br from-emerald-500 to-teal-600'}`}>
+                                <Icon name={isOffline ? 'wifi-off' : 'gamepad-2'} size={24} />
+                            </div>
+                            <div>
+                                <h1 className="text-lg font-black leading-none">BREWOG'S <span className="text-emerald-500">GAMES</span></h1>
+                                <p className="text-[10px] font-bold text-gray-400 flex items-center gap-1">
+                                    <span className={`w-2 h-2 rounded-full ${dbConnected ? 'bg-emerald-500' : 'bg-red-500 animate-pulse'}`}></span>
+                                    {isOffline ? 'OFFLINE MODE' : (dbConnected ? 'ONLINE' : 'CONNECTING...')}
+                                </p>
+                            </div>
+                        </div>
+                        <div className="flex gap-2">
+                             {isOffline && <button onClick={onDisableOffline} className="p-2 bg-blue-100 text-blue-600 rounded-xl"><Icon name="wifi" size={20}/></button>}
+                             <button onClick={toggleTheme} className="p-2 bg-gray-100 dark:bg-slate-800 rounded-xl text-gray-600 dark:text-yellow-400"><Icon name={theme==='dark'?'sun':'moon'} size={20} /></button>
+                             <button onClick={onLogout} className="p-2 bg-red-50 text-red-500 rounded-xl"><Icon name="log-out" size={20} /></button>
+                        </div>
+                    </div>
+
+                    <div className="p-4 md:p-6 space-y-6">
+                        {showReminder && (
+                            <div className="bg-amber-100 dark:bg-amber-900/30 p-4 rounded-2xl flex items-center gap-3 text-amber-800 dark:text-amber-200 mb-4 animate-bounce-slow border-l-4 border-amber-500 shadow-lg">
+                                <div className="p-2 bg-amber-100 dark:bg-amber-500/20 rounded-full"><Icon name="bell" size={24} /></div>
+                                <div className="flex-1">
+                                    <div className="text-sm font-black uppercase tracking-wide">Pemberitahuan Sistem</div>
+                                    <div className="text-xs opacity-80">Waktunya download rekap laporan bulanan!</div>
+                                </div>
+                                <button onClick={()=>setModal({open:true, type:'download'})} className="bg-amber-500 hover:bg-amber-600 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-lg hover:scale-105 transition-transform">Download</button>
+                            </div>
+                        )}
+
+                        {view === 'dashboard' ? (
+                            <div className="space-y-6 animate-fade-in">
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                    {/* CLOCK CARD PREMIUM */}
+                                    <div className="bg-gradient-to-br from-slate-900 to-slate-800 p-6 rounded-[2rem] text-white shadow-xl relative overflow-hidden group">
+                                        <div className="absolute top-0 right-0 w-40 h-40 bg-white/10 rounded-full blur-3xl -mr-16 -mt-16 group-hover:scale-110 transition-transform duration-700"></div>
+                                        <div className="relative z-10">
+                                            <div className="flex justify-between items-start mb-4">
+                                                <div>
+                                                    <div className="text-[10px] font-bold text-slate-400 tracking-[0.2em] mb-1 uppercase">Waktu Server</div>
+                                                    <div className="text-4xl font-mono font-bold tracking-tighter">{time.toLocaleTimeString('id-ID', {hour12:false})}</div>
+                                                </div>
+                                                <div className="p-3 bg-white/10 rounded-2xl backdrop-blur-md border border-white/10"><Icon name="clock" size={24} className="text-emerald-400" /></div>
+                                            </div>
+                                            <div className="mt-2 pt-4 border-t border-white/10 flex items-center gap-2 text-emerald-400 text-sm font-bold">
+                                                <Icon name="calendar" size={16}/> {time.toLocaleDateString('id-ID', {weekday:'long', day:'numeric', month:'long', year:'numeric'})}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="glass p-6 rounded-[2rem] shadow-sm hover:shadow-lg transition-all">
+                                        <div className="text-emerald-600 dark:text-emerald-400 text-xs font-bold tracking-wider mb-2 flex items-center gap-2"><div className="p-2 bg-emerald-100 dark:bg-emerald-500/10 rounded-lg"><Icon name="trending-up" size={18}/></div> OMSET BULAN INI</div>
+                                        <div className="text-3xl font-black">{fmt(stats.m)}</div>
+                                    </div>
+                                    <div className="glass p-6 rounded-[2rem] shadow-sm hover:shadow-lg transition-all">
+                                        <div className="text-purple-600 dark:text-purple-400 text-xs font-bold tracking-wider mb-2 flex items-center gap-2"><div className="p-2 bg-purple-100 dark:bg-purple-500/10 rounded-lg"><Icon name="shield" size={18}/></div> TOTAL PENDAPATAN</div>
+                                        <div className="text-3xl font-black">{fmt(stats.all)}</div>
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                    <MenuButton icon="file-text" color="purple" label="RIWAYAT" desc="Cek Data" onClick={()=>setView('history')} />
+                                    <MenuButton icon="settings" color="blue" label="SETTING PAKET" desc="Edit Harga" onClick={()=>setModal({open:true, type:'settings'})} />
+                                    <MenuButton icon="download" color="amber" label="DOWNLOAD" desc="Export CSV" onClick={()=>setModal({open:true, type:'download'})} />
+                                    <MenuButton icon="plus" color="emerald" label="TRANSAKSI" desc="Input Baru" onClick={()=>setModal({open:true, type:'transaction'})} primary />
+                                </div>
+
+                                <div className="bg-white dark:bg-slate-900/60 p-6 rounded-[2.5rem] border border-gray-200 dark:border-slate-800 shadow-xl backdrop-blur-md">
+                                    <div className="flex justify-between items-center mb-6">
+                                        <div className="flex gap-3 items-center">
+                                            <div className="p-2 bg-emerald-100 rounded-xl text-emerald-600"><Icon name="bar-chart-3" size={24}/></div>
+                                            <div><h3 className="font-bold text-lg">Analitik Performa</h3><p className="text-xs text-gray-500">Monitoring harian realtime</p></div>
+                                        </div>
+                                        <div className="flex bg-slate-100 dark:bg-slate-950 p-1 rounded-xl">
+                                            <button onClick={()=>setChartType('line')} className={`p-2 rounded-lg transition-all ${chartType==='line'?'bg-white dark:bg-slate-800 shadow text-emerald-500':'text-gray-400'}`}><Icon name="activity" size={18}/></button>
+                                            <button onClick={()=>setChartType('bar')} className={`p-2 rounded-lg transition-all ${chartType==='bar'?'bg-white dark:bg-slate-800 shadow text-blue-500':'text-gray-400'}`}><Icon name="bar-chart-2" size={18}/></button>
+                                        </div>
+                                    </div>
+                                    <div className="h-64"><canvas ref={chartCanvasRef}></canvas></div>
+                                </div>
+                            </div>
+                        ) : (
+                            <HistoryView 
+                                transactions={transactions} 
+                                onBack={()=>setView('dashboard')} 
+                                onDelete={(id, name)=>setConfirmDelete({open:true, id, collection:'transactions', name})} 
+                                onEdit={(item)=>setModal({open:true, type:'transaction', data:item})}
+                            />
+                        )}
+                    </div>
+
+                    {/* MODAL WRAPPER */}
+                    {modal.open && (
+                        <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/60 p-4 backdrop-blur-sm animate-fade-in">
+                            <div className="w-full max-w-lg bg-white dark:bg-slate-900 rounded-[2rem] shadow-2xl max-h-[90vh] overflow-y-auto animate-slide-up border border-gray-100 dark:border-slate-800">
+                                <div className="p-6 border-b border-gray-100 dark:border-slate-800 flex justify-between items-center sticky top-0 bg-white dark:bg-slate-900 z-10 backdrop-blur-md">
+                                    <h2 className="text-lg font-black uppercase tracking-wider flex items-center gap-3">
+                                        <div className="w-1.5 h-6 bg-emerald-500 rounded-full"></div> {modal.type === 'transaction' && modal.data ? 'EDIT TRANSAKSI' : modal.type}
+                                    </h2>
+                                    <button onClick={()=>setModal({open:false})} className="p-2 bg-gray-100 dark:bg-slate-800 rounded-full hover:bg-gray-200 transition-colors"><Icon name="x" size={20}/></button>
+                                </div>
+                                <div className="p-6">
+                                    {modal.type === 'transaction' && <TransactionForm packages={packages} initialData={modal.data} onSave={(d, id)=>saveData('trans', d, id).then(()=>setModal({open:false}))} />}
+                                    {modal.type === 'settings' && <SettingsForm packages={packages} onSave={(d,id)=>saveData('pkg', d, id)} onDelete={(id, name)=>setConfirmDelete({open:true, id, collection:'packages', name})} onReorder={handleReorder} onTouchStart={onTouchStart} onTouchEnd={onTouchEnd} />}
+                                    {modal.type === 'download' && <DownloadForm transactions={transactions} onClose={()=>setModal({open:false})} setLoading={fakeLoading} />}
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                    
+                    <div className="text-center pb-8 text-[10px] text-gray-400/50 font-mono">powered by J.Sheby</div>
+                </div>
+            );
+        }
+
+        // --- SUB COMPONENTS ---
+
+        function MenuButton({ icon, color, label, desc, onClick, primary }) {
+            const colors = {
+                purple: 'text-purple-600 bg-purple-50 dark:bg-purple-900/20 border-purple-100 dark:border-purple-800',
+                blue: 'text-blue-600 bg-blue-50 dark:bg-blue-900/20 border-blue-100 dark:border-blue-800',
+                amber: 'text-amber-600 bg-amber-50 dark:bg-amber-900/20 border-amber-100 dark:border-amber-800',
+                emerald: 'text-white bg-gradient-to-br from-emerald-500 to-teal-600 shadow-lg shadow-emerald-500/30'
+            };
+            const c = colors[color];
+            return (
+                <button onClick={onClick} className={`p-5 rounded-[1.5rem] border transition-all active:scale-95 flex flex-col items-center justify-center gap-3 hover:shadow-xl ${primary ? c + ' border-transparent' : 'bg-white dark:bg-slate-900/50 border-gray-200 dark:border-slate-800 ' + c.replace('bg-', 'hover:border-')}`}>
+                    <div className={`p-3 rounded-2xl transition-transform group-hover:-translate-y-1 ${primary ? 'bg-white/20' : c.split(' ')[1]}`}>
+                         <Icon name={icon} size={32} className={primary ? 'text-white' : c.split(' ')[0]} />
+                    </div>
+                    <div className="text-center">
+                        <span className={`block text-[11px] font-black uppercase tracking-wider mb-0.5 ${primary ? 'text-white' : 'text-gray-700 dark:text-slate-300'}`}>{label}</span>
+                        <span className={`block text-[9px] font-medium ${primary ? 'text-emerald-100' : 'text-gray-400'}`}>{desc}</span>
+                    </div>
+                </button>
+            );
+        }
+
+        function HistoryView({ transactions, onBack, onDelete, onEdit }) {
+            const [search, setSearch] = useState('');
+            const [activeMenu, setActiveMenu] = useState(null);
+            
+            return (
+                <div className="animate-fade-in space-y-6">
+                    <div className="flex items-center gap-4 mb-2">
+                        <button onClick={onBack} className="p-3 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-2xl hover:shadow-md transition-all"><Icon name="chevron-left" size={24}/></button>
+                        <div>
+                            <h2 className="text-2xl font-black">Riwayat Transaksi</h2>
+                            <p className="text-xs text-gray-500">Daftar semua penyewaan</p>
+                        </div>
+                    </div>
+                    <div className="relative group">
+                        <div className="absolute left-5 top-4 text-gray-400 group-focus-within:text-emerald-500 transition-colors"><Icon name="search" size={20}/></div>
+                        <input className="w-full bg-white dark:bg-slate-900/60 border border-gray-200 dark:border-slate-800 rounded-2xl py-4 pl-14 pr-6 outline-none focus:ring-2 focus:ring-emerald-500 transition-all font-medium" placeholder="Cari nama pelanggan..." value={search} onChange={e=>setSearch(e.target.value)} />
+                    </div>
+                    <div className="space-y-3 pb-20">
+                        {transactions.filter(t => (t.customerName||'').toLowerCase().includes(search.toLowerCase())).map(t => (
+                            // Z-INDEX FIX: active menu item gets higher index
+                            <div key={t.id} className="bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 p-5 rounded-2xl flex justify-between items-center shadow-sm relative transition-all" style={{zIndex: activeMenu === t.id ? 50 : 0}}>
+                                <div>
+                                    <div className="flex items-center gap-3">
+                                         <div className="font-bold text-lg">{t.customerName}</div>
+                                         <span className="text-[10px] bg-slate-100 dark:bg-slate-800 px-2.5 py-1 rounded-lg font-mono text-slate-500 font-bold">{new Date(t.createdAt).toLocaleTimeString('id-ID', {hour:'2-digit', minute:'2-digit'})}</span>
+                                    </div>
+                                    <div className="text-xs font-medium text-gray-500 bg-gray-50 dark:bg-slate-800/50 px-2 py-1 rounded inline-block mt-1.5">{t.packageName}</div>
+                                </div>
+                                <div className="text-right flex items-center gap-4">
+                                    <div>
+                                        <div className="font-black text-emerald-600 text-lg">Rp {new Intl.NumberFormat('id-ID').format(t.totalPrice || 0)}</div>
+                                        <div className="text-[10px] text-gray-400 font-medium">{new Date(t.createdAt).toLocaleDateString()}</div>
+                                    </div>
+                                    <div className="relative">
+                                        <button onClick={()=>setActiveMenu(activeMenu === t.id ? null : t.id)} className="p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-xl transition-colors"><Icon name="more-vertical" size={20}/></button>
+                                        {activeMenu === t.id && (
+                                            <div className="absolute right-0 top-full mt-2 w-40 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl shadow-xl z-50 overflow-hidden animate-fade-in origin-top-right">
+                                                <button onClick={()=>{onEdit(t); setActiveMenu(null)}} className="w-full text-left px-4 py-3 text-xs font-bold hover:bg-gray-50 dark:hover:bg-slate-700 flex items-center gap-2 text-gray-600 dark:text-gray-300"><Icon name="edit-2" size={14}/> Edit Data</button>
+                                                <button onClick={()=>{onDelete(t.id, t.customerName); setActiveMenu(null)}} className="w-full text-left px-4 py-3 text-xs font-bold text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2 border-t border-gray-100 dark:border-slate-700"><Icon name="trash-2" size={14}/> Hapus Data</button>
+                                            </div>
+                                        )}
+                                        {activeMenu === t.id && <div className="fixed inset-0 z-40" onClick={()=>setActiveMenu(null)}></div>}
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            );
+        }
+
+        function TransactionForm({ packages, initialData, onSave }) {
+            const [form, setForm] = useState({customerName: (initialData && initialData.customerName) || '', packageId: (initialData && initialData.packageId) || '', packageName: (initialData && initialData.packageName) || '', customPrice: (initialData && initialData.totalPrice) || 0});
+            const [search, setSearch] = useState('');
+            const [expand, setExpand] = useState('ALL'); 
+
+            const grouped = useMemo(() => {
+                const g = {}; packages.forEach(p => { const c = p.category; if(!g[c]) g[c] = []; if(search === '' || p.name.toLowerCase().includes(search.toLowerCase()) || c.toLowerCase().includes(search.toLowerCase())) g[c].push(p); });
+                return g;
+            }, [packages, search]);
+
+            const handleSubmit = (e) => {
+                e.preventDefault();
+                onSave({
+                    ...form,
+                    totalPrice: Number(form.customPrice) || 0
+                }, initialData?.id);
+            };
+
+            return (
+                <form onSubmit={handleSubmit} className="space-y-6">
+                    <div>
+                        <label className="text-[10px] font-bold text-gray-400 uppercase block mb-1">Nama Pelanggan</label>
+                        <div className="relative group">
+                            <div className="absolute left-4 top-3.5 text-gray-400 group-focus-within:text-emerald-500 transition-colors"><Icon name="user" size={20}/></div>
+                            <input required className="w-full pl-12 p-3.5 bg-slate-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-2xl outline-none focus:ring-2 focus:ring-emerald-500 transition-all font-bold text-lg" value={form.customerName} onChange={e=>setForm({...form, customerName:e.target.value})} placeholder="Masukkan nama..." />
+                        </div>
+                    </div>
+                    <div>
+                        <label className="text-[10px] font-bold text-gray-400 uppercase mb-2 block tracking-wider">Pilih Paket</label>
+                        <div className="relative mb-3"><div className="absolute left-3 top-2.5 text-gray-400"><Icon name="search" size={16}/></div><input className="w-full pl-10 p-2.5 text-sm bg-white dark:bg-slate-900 border dark:border-slate-700 rounded-xl" placeholder="Cari paket..." value={search} onChange={e=>setSearch(e.target.value)}/></div>
+                        <div className="max-h-60 overflow-y-auto space-y-3 pr-1 custom-scrollbar">
+                            {Object.entries(grouped).map(([cat, items]) => (
+                                items.length > 0 && <div key={cat} className="border border-gray-200 dark:border-slate-700 rounded-xl overflow-hidden">
+                                    <button type="button" onClick={()=>setExpand(expand===cat?null:cat)} className="w-full flex justify-between items-center bg-gray-50 dark:bg-slate-800 p-3 text-[10px] font-black text-gray-500 uppercase tracking-widest">{cat} <Icon name={expand===cat?'chevron-up':'chevron-down'} size={14} className="text-gray-400"/></button>
+                                    {(expand===cat || expand==='ALL') && <div className="p-2 space-y-2 bg-white dark:bg-slate-950/30">
+                                        {items.map(p => (
+                                            <div key={p.id} onClick={()=>setForm({...form, packageId:p.id, customPrice:p.price, packageName:p.name})} className={`p-3 rounded-lg border cursor-pointer flex justify-between items-center transition-all ${form.packageId===p.id ? 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-500 ring-1 ring-emerald-500' : 'bg-white dark:bg-slate-900 border-gray-100 dark:border-slate-800 hover:border-emerald-300'}`}>
+                                                <div><div className="text-sm font-bold">{p.name}</div><div className="text-[10px] text-gray-500">{p.description}</div></div>
+                                                <div className="text-sm font-black text-emerald-600">Rp {p.price.toLocaleString()}</div>
+                                            </div>
+                                        ))}
+                                    </div>}
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                    <div className={`bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-900/20 dark:to-teal-900/20 p-5 rounded-2xl border border-emerald-100 dark:border-emerald-800/50 transition-all duration-500 ${form.packageId ? 'opacity-100 translate-y-0' : 'opacity-50 translate-y-4 grayscale'}`}>
+                         <label className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider block mb-1">Total Harga (Edit Jika Perlu)</label>
+                         <div className="relative"><span className="absolute left-0 top-1 text-lg font-bold text-emerald-600">Rp</span><input type="number" className="w-full bg-transparent pl-8 text-3xl font-black text-emerald-600 outline-none border-b-2 border-emerald-200 focus:border-emerald-500 transition-colors" value={form.customPrice} onChange={e=>setForm({...form, customPrice:e.target.value})} /></div>
+                    </div>
+                    <button className="w-full py-4 bg-emerald-600 text-white font-bold rounded-xl shadow-xl shadow-emerald-500/30 active:scale-95 transition-all flex justify-center items-center gap-2"><Icon name="check-circle" size={20}/> SIMPAN TRANSAKSI</button>
+                </form>
+            );
+        }
+
+        function SettingsForm({ packages, onSave, onDelete, onReorder, onTouchStart, onTouchEnd }) {
+             const [mode, setMode] = useState('list');
+             const [newPkg, setNewPkg] = useState({category:'', name:'', price:'', description:''});
+             const [editId, setEditId] = useState(null);
+             const [dragItem, setDragItem] = useState(null);
+
+             const onDragStart = (e, index) => { setDragItem(index); e.dataTransfer.effectAllowed = "move"; e.target.style.opacity = '0.5'; };
+             const onDragEnd = (e) => { e.target.style.opacity = '1'; };
+             const onDragOver = (e) => e.preventDefault();
+             const onDrop = (e, index) => { e.preventDefault(); onReorder(dragItem, index); setDragItem(null); };
+
+             const handleSave = (e) => {
+                 e.preventDefault();
+                 onSave({...newPkg, price:Number(newPkg.price), category: newPkg.category.toUpperCase()}, editId);
+                 setNewPkg({category:'', name:'', price:'', description:''});
+                 setEditId(null);
+                 setMode('list');
+             };
+
+             if(mode === 'add') return (
+                 <form onSubmit={handleSave} className="space-y-4">
+                     <h3 className="font-black text-lg border-l-4 border-blue-500 pl-3 uppercase">{editId ? 'Edit Paket' : 'Tambah Paket Baru'}</h3>
+                     <div><label className="text-[10px] font-bold text-gray-500 mb-1 block uppercase">Kategori</label><input list="cats" className="w-full p-3.5 rounded-xl border dark:bg-slate-900 dark:border-slate-700 outline-none font-bold" placeholder="Pilih atau Ketik..." value={newPkg.category} onChange={e=>setNewPkg({...newPkg, category:e.target.value})} required /><datalist id="cats">{[...new Set(packages.map(p=>p.category))].map(c=><option value={c}/>)}</datalist></div>
+                     <div><label className="text-[10px] font-bold text-gray-500 mb-1 block uppercase">Nama Paket</label><input className="w-full p-3.5 rounded-xl border dark:bg-slate-900 dark:border-slate-700 outline-none font-medium" placeholder="Contoh: Paket Malam" value={newPkg.name} onChange={e=>setNewPkg({...newPkg, name:e.target.value})} required /></div>
+                     <div className="grid grid-cols-2 gap-3">
+                        <div><label className="text-[10px] font-bold text-gray-500 mb-1 block uppercase">Harga (Rp)</label><input type="number" className="w-full p-3.5 rounded-xl border dark:bg-slate-900 dark:border-slate-700 outline-none font-bold" placeholder="0" value={newPkg.price} onChange={e=>setNewPkg({...newPkg, price:e.target.value})} required /></div>
+                        <div><label className="text-[10px] font-bold text-gray-500 mb-1 block uppercase">Keterangan</label><input className="w-full p-3.5 rounded-xl border dark:bg-slate-900 dark:border-slate-700 outline-none" placeholder="Jam/Info" value={newPkg.description} onChange={e=>setNewPkg({...newPkg, description:e.target.value})} /></div>
+                     </div>
+                     <div className="flex gap-3 mt-6">
+                        <button type="button" onClick={()=>setMode('list')} className="flex-1 py-3 bg-gray-200 dark:bg-slate-800 rounded-xl font-bold">BATAL</button>
+                        <button className="flex-1 py-3 bg-blue-600 text-white rounded-xl font-bold shadow-lg">SIMPAN</button>
+                     </div>
+                 </form>
+             );
+
+             return (
+                 <div className="space-y-4">
+                     <button onClick={()=>{setEditId(null); setMode('add');}} className="w-full py-4 border-2 border-dashed border-gray-300 dark:border-slate-700 rounded-2xl font-bold text-gray-500 hover:border-blue-500 hover:text-blue-500 flex justify-center items-center gap-2 transition-colors"><Icon name="plus" size={18}/> TAMBAH PAKET BARU</button>
+                     <div className="max-h-[50vh] overflow-y-auto space-y-3 pr-1 custom-scrollbar">
+                         {packages.map((p, i) => (
+                             <div 
+                                key={p.id||i} 
+                                className="p-4 bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-xl flex items-center justify-between cursor-move hover:shadow-md transition-all"
+                                draggable="true"
+                                onDragStart={(e) => onDragStart(e, i)}
+                                onDragEnd={onDragEnd}
+                                onDragOver={(e) => onDragOver(e, i)}
+                                onDrop={(e) => onDrop(e, i)}
+                             >
+                                 <div className="flex items-center gap-4">
+                                     <div className="text-gray-400 cursor-grab touch-none p-2 hover:bg-gray-100 rounded-lg" onTouchStart={onTouchStart} onTouchEnd={()=>onTouchEnd(i)}><Icon name="grip-vertical" size={18}/></div>
+                                     <div>
+                                         <div className="text-[10px] font-black text-gray-400 uppercase tracking-wider">{p.category}</div>
+                                         <div className="text-sm font-bold">{p.name}</div>
+                                         <div className="text-xs text-emerald-600 font-bold">Rp {p.price.toLocaleString()}</div>
+                                     </div>
+                                 </div>
+                                 <div className="flex gap-2 opacity-50 hover:opacity-100">
+                                     <button onClick={()=>{setNewPkg(p); setEditId(p.id); setMode('add');}} className="p-2 bg-blue-50 dark:bg-blue-900/10 text-blue-600 rounded-lg hover:bg-blue-100"><Icon name="edit-2" size={16}/></button>
+                                     <button onClick={()=>onDelete(p.id)} className="p-2 bg-red-50 dark:bg-red-900/10 text-red-600 rounded-lg hover:bg-red-100"><Icon name="trash-2" size={16}/></button>
+                                 </div>
+                             </div>
+                         ))}
+                     </div>
+                 </div>
+             );
+        }
+
+        function DownloadForm({ transactions, onClose, setLoading }) {
+             const [m, setM] = useState(new Date().getMonth());
+             const [y, setY] = useState(new Date().getFullYear());
+
+             const doDownload = () => {
+                 setLoading(() => {
+                    const filtered = transactions.filter(t => t.createdAt.getMonth() === parseInt(m) && t.createdAt.getFullYear() === parseInt(y));
+                    if(filtered.length === 0) { alert('Data Kosong!'); return; }
+                    
+                    const total = filtered.reduce((a,b)=>a+(b.totalPrice||0), 0);
+                    const mName = ["JANUARI","FEBRUARI","MARET","APRIL","MEI","JUNI","JULI","AGUSTUS","SEPTEMBER","OKTOBER","NOVEMBER","DESEMBER"][m];
+                    
+                    let csv = `LAPORAN BREWOGS GAMES\nPERIODE:;${mName} ${y}\nTOTAL OMSET:;Rp ${new Intl.NumberFormat('id-ID').format(total)}\n\nTANGGAL;JAM;NAMA PELANGGAN;PAKET;HARGA\n`;
+                    filtered.forEach(r => csv += `${r.createdAt.toLocaleDateString('id-ID')};${r.createdAt.toLocaleTimeString('id-ID')};"${r.customerName}";"${r.packageName}";${r.totalPrice}\n`);
+                    csv += `;;;TOTAL KESELURUHAN;${total}\n`;
+
+                    const link = document.createElement("a");
+                    link.href = "data:text/csv;charset=utf-8," + encodeURI(csv);
+                    link.download = `REKAP_BREWOGS_${mName}_${y}.csv`;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    
+                    localStorage.setItem('last_dl', `${new Date().getMonth()}-${new Date().getFullYear()}`);
+                    onClose();
+                 });
+             };
+
+             return (
+                 <div className="space-y-6">
+                     <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-800 p-4 rounded-2xl flex gap-3 text-xs text-amber-800 dark:text-amber-200">
+                        <Icon name="file-text" size={20} className="shrink-0"/> 
+                        <p>Data akan didownload dalam format <strong>.CSV</strong>. File ini dapat dibuka dengan rapi menggunakan Microsoft Excel atau Google Sheets.</p>
+                     </div>
+                     <div className="grid grid-cols-2 gap-4">
+                        <div><label className="text-[10px] font-bold text-gray-500 mb-1 block uppercase">BULAN</label><select value={m} onChange={e=>setM(e.target.value)} className="w-full p-3.5 border rounded-xl bg-white dark:bg-slate-900 outline-none font-bold text-center cursor-pointer">{["JAN","FEB","MAR","APR","MEI","JUN","JUL","AGU","SEP","OKT","NOV","DES"].map((v,i)=><option value={i}>{v}</option>)}</select></div>
+                        <div><label className="text-[10px] font-bold text-gray-500 mb-1 block uppercase">TAHUN</label><select value={y} onChange={e=>setY(e.target.value)} className="w-full p-3.5 border rounded-xl bg-white dark:bg-slate-900 outline-none font-bold text-center cursor-pointer">{[2024,2025,2026,2027].map(v=><option value={v}>{v}</option>)}</select></div>
+                     </div>
+                     <button onClick={doDownload} className="w-full py-4 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl shadow-lg shadow-amber-500/20 flex items-center justify-center gap-2 transition-transform active:scale-95"><Icon name="download" size={20}/> DOWNLOAD LAPORAN</button>
+                 </div>
+             );
+        }
+
+        // START REACT
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
